@@ -102,7 +102,7 @@ def k(t) :
         return -1
 
 
-# In[225]:
+# In[235]:
 
 
 def rotr(n, x) :
@@ -115,16 +115,9 @@ def rotr(n, x) :
 def rotl(n, x) :
     xint = int.from_bytes(x, "big")
     val = (xint << n) | (xint >> 32 - n)
-    print(hex(xint << n))
-    print(hex(xint >> 32 - n))
     # keep in 32-bit space
     val &= 0xffffffff
     return int.to_bytes(val, 4, "big")
-
-0110 0111 0100 0101 0010 0011 0000 0001
-1110 0100 1010 0100 0110 0000 0010 1100
-
-1100 1110 1010 
 
 
 # In[227]:
@@ -152,10 +145,7 @@ def pad(M) :
     s += (1 << k).to_bytes(second_len, byteorder="big")
     third_len = 8
     s += (l).to_bytes(third_len, byteorder="big")
-    
-    #print(len(s))
     return s
-#pad("abc")
 
 # Padded message is parsed into N 512-bit blocks. The 512 bits 
 # of the input block may be expressed as 16 32-bit words
@@ -193,7 +183,7 @@ hex(init_hash()[1][1])
 pad("abc")[2]
 
 
-# In[228]:
+# In[256]:
 
 
 def sha1(m) :
@@ -205,7 +195,6 @@ def sha1(m) :
     h.insert(0,init_hash())
     
     N = len(M)
-    print(str(N))
     #n = N+1 if N>1 else N
     
     w = []
@@ -214,7 +203,7 @@ def sha1(m) :
             if 0 <= t and t <= 15 :
                 # M starts at index 1 in the docs!  So indices in
                 # M must be subtracted by 1.
-                w.insert(t,int.to_bytes(M[i-1][t*4], 4, "big"))
+                w.insert(t,M[i-1][t*4:(t*4)+4])
             else :
                 w.insert(t,                          rotl(1, b_xor(b_xor(b_xor(w[t-3],w[t-8]),                                        w[t-14]), w[t-16])))
                 
@@ -224,54 +213,50 @@ def sha1(m) :
         d = h[i-1][3]
         e = h[i-1][4]
         
-        for wel in w :
-            
-        
         for t in range(0, 80) :
             kt = int.to_bytes(k(t), 4, "big")           
             T = b_plus(b_plus(b_plus(b_plus(rotl(5,a), f(t,b,c,d)),                        e), kt), w[t])
-            
-            print("t=" + str(t) +                   ", a=" + hex(int.from_bytes(a, "big")) +                   ", rotl=" + hex(int.from_bytes(rotl(5,a), "big")) +                   ", f=" + hex(int.from_bytes(f(t,b,c,d), "big")) +                   ", e=" + hex(int.from_bytes(e, "big")) +                   ", kt=" + hex(int.from_bytes(kt, "big")) +                   ", wt=" + hex(int.from_bytes(w[t], "big")) + "\n")
             
             e = d
             d = c
             c = rotl(30, b)
             b = a
             a = T
-            
-            print("t=" + str(t) +                   ", a=" + hex(int.from_bytes(a, "big")) +                   ", b=" + hex(int.from_bytes(b, "big")) +                   ", c=" + hex(int.from_bytes(c, "big")) +                   ", d=" + hex(int.from_bytes(d, "big")) +                   ", e=" + hex(int.from_bytes(e, "big")) + "\n")
-            
+  
         new_h = [b_plus(x,h[i-1][y]) for x,y in                             zip([a,b,c,d,e],range(5))]
+        
         h.insert(i, new_h)
         
     return h[N]
 
 
-# In[216]:
+# In[257]:
 
 
 sha1("abc")
 
 
-# In[218]:
+# In[258]:
 
 
 hex(int.from_bytes(rotl(5, int.to_bytes(0x67452301, 4, "big")), "big"))
 
 
-# In[204]:
+# In[267]:
 
 
-s = ""
-for b in sha1("abc") :
-    s += hex(int.from_bytes(b, "big"))
+s = "0x"
+for b in sha1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq") :
+    s += hex(int.from_bytes(b, "big"))[2:]
 print(s)
 
 
-# In[197]:
+# In[268]:
 
 
-
+ex = 0x84983E441C3BD26EBAAE4AA1F95129E5E54670F1
+print(hex(ex))
+hex(ex) == s
 
 
 # In[ ]:
