@@ -1,26 +1,74 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[18]:
+# In[15]:
 
 
 import math
 
 
-# In[19]:
+# In[135]:
+
+
+# Bytes bit-wise arithmetic
+# Assumes bytes objects are 32-bit words, per SHA-1
+
+def b_xor(x, y) :
+    intx = int.from_bytes(x, "big")
+    inty = int.from_bytes(y, "big")
+    val = intx^inty & 0xffffffff
+    return int.to_bytes(val, 4, "big")
+
+def b_and(x, y) :
+    intx = int.from_bytes(x, "big")
+    inty = int.from_bytes(y, "big")
+    val = intx&inty & 0xffffffff
+    return int.to_bytes(val, 4, "big")
+
+def b_complement(x) :
+    intx = int.from_bytes(x, "big")
+    val = ~intx & 0xffffffff
+    return int.to_bytes(val, 4, "big")
+
+
+# In[137]:
+
+
+# Bytes arithmetic
+# Assumes bytes objects are 32-bit words, per SHA-1
+
+# addition is performed modulo 2^32
+def b_plus(x, y) :
+    intx = int.from_bytes(x, "big")
+    inty = int.from_bytes(y, "big")
+    val = intx + inty
+    val = val % pow(2,32)
+    return int.to_bytes(val, 4, "big")
+
+def b_mod(x, y) :
+    intx = int.from_bytes(x, "big")
+    inty = int.from_bytes(y, "big")
+    val = intx % inty
+    return int.to_bytes(val, 4, "big")
+
+
+# In[41]:
 
 
 def ch(x, y, z) :
-    return (x & y)^(~x & z)
+    # (x & y)^(~x & z)
+    return b_xor(b_and(x,y), b_and(b_complement(x), z))
 
 def parity(x, y, z) :
-    return x ^ y ^ z
+    # x ^ y ^ z
+    return b_xor(b_xor(x,y),z)
 
 def maj(x, y, z) :
-    return (x & y)^(x & z)^(y & z)
+    # (x & y)^(x & z)^(y & z)
+    return b_xor(b_xor(b_and(x,y),b_and(x,z)),b_and(y,z))
 
 
-# In[20]:
+# In[17]:
 
 
 def f(t, x, y, z) :
@@ -37,7 +85,7 @@ def f(t, x, y, z) :
         return -1
 
 
-# In[21]:
+# In[18]:
 
 
 def k(t) :
@@ -54,18 +102,47 @@ def k(t) :
         return -1
 
 
-# In[5]:
+# In[225]:
+
+
+def rotr(n, x) :
+    xint = int.from_bytes(x, "big")
+    val = (xint >> n) | (xint << 32 - n)
+    # keep in 32-bit space
+    val &= 0xffffffff
+    return int.to_bytes(val, 4, "big")
+
+def rotl(n, x) :
+    xint = int.from_bytes(x, "big")
+    val = (xint << n) | (xint >> 32 - n)
+    print(hex(xint << n))
+    print(hex(xint >> 32 - n))
+    # keep in 32-bit space
+    val &= 0xffffffff
+    return int.to_bytes(val, 4, "big")
+
+0110 0111 0100 0101 0010 0011 0000 0001
+1110 0100 1010 0100 0110 0000 0010 1100
+
+1100 1110 1010 
+
+
+# In[227]:
+
+
+hex(int.from_bytes(rotl(5, int.to_bytes(0x67452301, 4, "big")),"big"))
+
+
+# In[20]:
 
 
 def get_bit_length(s) :
     return 8*len(s.encode("utf-8"))
 
 
-# In[43]:
+# In[21]:
 
 
-# Padded message is parsed into N 512-bit blocks. The 512 bits 
-# of the input block
 def pad(M) :
     l = get_bit_length(M)
     k = (512 + 448 - (l % 512 + 1)) % 512
@@ -80,8 +157,118 @@ def pad(M) :
     return s
 #pad("abc")
 
+# Padded message is parsed into N 512-bit blocks. The 512 bits 
+# of the input block may be expressed as 16 32-bit words
+# expects M is a bytes object
+def parse_pad(M) :
+    blocks = []
+    for index in range(0,len(M),65) :
+        blocks.append(M[index:index+64])
+    return blocks
 
-# In[38]:
+
+# In[22]:
+
+
+def init_hash() :
+    return [bytes.fromhex(x) for x in            ("67452301", "efcdab89", "98badcfe",              "10325476", "c3d2e1f0") ]
+
+
+# In[23]:
+
+
+s = parse_pad(pad("abcdef"))
+s[0][0]
+
+
+# In[77]:
+
+
+hex(init_hash()[1][1])
+
+
+# In[25]:
+
+
+pad("abc")[2]
+
+
+# In[228]:
+
+
+def sha1(m) :
+    s = pad(m)
+    
+    # M and h are both arrays of bytes objects
+    M = parse_pad(s)
+    h = []
+    h.insert(0,init_hash())
+    
+    N = len(M)
+    print(str(N))
+    #n = N+1 if N>1 else N
+    
+    w = []
+    for i in range(1,N+1) :
+        for t in range(0,80) :
+            if 0 <= t and t <= 15 :
+                # M starts at index 1 in the docs!  So indices in
+                # M must be subtracted by 1.
+                w.insert(t,int.to_bytes(M[i-1][t*4], 4, "big"))
+            else :
+                w.insert(t,                          rotl(1, b_xor(b_xor(b_xor(w[t-3],w[t-8]),                                        w[t-14]), w[t-16])))
+                
+        a = h[i-1][0]
+        b = h[i-1][1]
+        c = h[i-1][2]
+        d = h[i-1][3]
+        e = h[i-1][4]
+        
+        for wel in w :
+            
+        
+        for t in range(0, 80) :
+            kt = int.to_bytes(k(t), 4, "big")           
+            T = b_plus(b_plus(b_plus(b_plus(rotl(5,a), f(t,b,c,d)),                        e), kt), w[t])
+            
+            print("t=" + str(t) +                   ", a=" + hex(int.from_bytes(a, "big")) +                   ", rotl=" + hex(int.from_bytes(rotl(5,a), "big")) +                   ", f=" + hex(int.from_bytes(f(t,b,c,d), "big")) +                   ", e=" + hex(int.from_bytes(e, "big")) +                   ", kt=" + hex(int.from_bytes(kt, "big")) +                   ", wt=" + hex(int.from_bytes(w[t], "big")) + "\n")
+            
+            e = d
+            d = c
+            c = rotl(30, b)
+            b = a
+            a = T
+            
+            print("t=" + str(t) +                   ", a=" + hex(int.from_bytes(a, "big")) +                   ", b=" + hex(int.from_bytes(b, "big")) +                   ", c=" + hex(int.from_bytes(c, "big")) +                   ", d=" + hex(int.from_bytes(d, "big")) +                   ", e=" + hex(int.from_bytes(e, "big")) + "\n")
+            
+        new_h = [b_plus(x,h[i-1][y]) for x,y in                             zip([a,b,c,d,e],range(5))]
+        h.insert(i, new_h)
+        
+    return h[N]
+
+
+# In[216]:
+
+
+sha1("abc")
+
+
+# In[218]:
+
+
+hex(int.from_bytes(rotl(5, int.to_bytes(0x67452301, 4, "big")), "big"))
+
+
+# In[204]:
+
+
+s = ""
+for b in sha1("abc") :
+    s += hex(int.from_bytes(b, "big"))
+print(s)
+
+
+# In[197]:
 
 
 
